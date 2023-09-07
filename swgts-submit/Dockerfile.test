@@ -1,0 +1,5 @@
+FROM python:3.11
+ADD swgts-submit requirements.txt swgts-submit
+RUN pip install -r swgts-submit/requirements.txt
+ENTRYPOINT ["/usr/local/bin/python3", "-m", "swgts-submit"]
+CMD ["-h"]

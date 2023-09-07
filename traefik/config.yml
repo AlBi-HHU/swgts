@@ -1,0 +1,18 @@
+log:
+  level: INFO
+
+entryPoints:
+  https:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false
+    endpoint: "unix:///var/run/docker.sock"
+    watch: true
+
+api:
+  dashboard: true
+  insecure: true
+
+accessLog: {}

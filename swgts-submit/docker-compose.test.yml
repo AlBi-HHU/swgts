@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+    swgts-submit-benchmark:
+        build:
+          context: .
+          dockerfile: Dockerfile.test
+        command: --server https://server/api /scratch/test-file.fastq.gz
+        volumes:
+            - type: bind
+              source: ./scratch
+              target: /scratch
+              read_only: false

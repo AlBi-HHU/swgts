@@ -1,0 +1,130 @@
+version: "3"
+
+services:
+    swgts-api:
+        build:
+          context: ./
+          dockerfile: swgts-backend/swgts-api/Dockerfile
+        volumes:
+            - type: bind
+              source: ./swgts-backend/input
+              target: /input
+              read_only: true
+            - type: bind
+              source: ./swgts-backend/output
+              target: /output
+        ports:
+          - "80"
+        networks:
+            - traefik-api
+            - api-redis
+        labels:
+            - traefik.enable=true
+            - traefik.http.routers.swgts-api_https.rule=PathPrefix(`/api/`)
+            - traefik.http.routers.swgts-api_https.tls=true
+            - traefik.http.routers.swgts-api_https.entrypoints=https
+            - traefik.docker.network=swgts-deploy_traefik-api
+            - traefik.http.services.portwhine.loadbalancer.server.port=80
+        restart: unless-stopped
+        depends_on:
+            redis:
+                condition: service_healthy
+            swgts-filter:
+                condition: service_started
+
+    swgts-filter:
+        build:
+          context: ./
+          dockerfile: swgts-backend/swgts-filter/Dockerfile
+        volumes:
+            - type: bind
+              source: ./swgts-backend/input
+              target: /input
+              read_only: true
+        networks:
+            - redis-filter
+        restart: unless-stopped
+        depends_on:
+            redis:
+                condition: service_healthy
+
+
+    redis:
+        image: "redis:7-alpine"
+        hostname: redis
+        networks:
+            - redis-filter
+            - api-redis
+        volumes:
+            - type: volume
+              source: cache
+              target: /data
+        healthcheck:
+            test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+            interval: 5s
+        restart: "unless-stopped"
+
+    swgts-frontend:
+      build:
+        context: ./
+        dockerfile: swgts-frontend/Dockerfile
+      ports:
+        - "80"
+      labels:
+          - traefik.enable=true
+          - traefik.http.routers.swgts-frontend_https.rule=PathPrefix(`/frontend`)
+          - traefik.http.routers.swgts-frontend_https.tls=true
+          - traefik.http.routers.swgts-frontend_https.entrypoints=https
+          - traefik.http.middlewares.strip_frontend.stripprefix.prefixes=/frontend
+          - traefik.http.routers.swgts-frontend_https.middlewares=strip_frontend@docker
+          - traefik.docker.network=swgts-deploy_traefik-frontend
+          - traefik.http.services.portugal.loadbalancer.server.port=80
+      networks:
+        - traefik-frontend
+      restart: unless-stopped
+      depends_on:
+          swgts-api:
+              condition: service_started
+
+    traefik:
+      image: traefik:v2.10
+      command:
+        - --configFile=/traefik/conf.yml
+      ports:
+        - '443:443'
+        - '8080:8080'
+      volumes:
+        - ./traefik/config.yml:/traefik/conf.yml:ro
+        - /var/run/docker.sock:/var/run/docker.sock
+        - type: bind
+          source: ./tls/server.crt
+          target: /etc/ssl/certs/server.crt
+          read_only: true
+        - type: bind
+          source: ./tls/server.pem
+          target: /etc/ssl/private/server.pem
+          read_only: true
+      networks:
+        - traefik-frontend
+        - traefik-api
+        - outside-traefik
+      depends_on:
+          swgts-frontend:
+              condition: service_started
+          swgts-api:
+              condition: service_started
+volumes:
+    cache:
+         driver: local
+            
+networks:
+    outside-traefik:
+        internal: false
+    traefik-frontend:
+        internal: true
+    traefik-api:
+        internal: true
+    api-redis:
+        internal: true
+    redis-filter:
+        internal: true

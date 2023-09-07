@@ -1,0 +1,1 @@
+VERSION_INFORMATION = {'commit': 'could not determine', 'date': 'could not determine', 'version': '0.0.0'}
