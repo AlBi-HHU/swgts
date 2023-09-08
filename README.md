@@ -51,6 +51,10 @@ python -m swgts-submit
 
 A website frontend is also included in the docker application and can be found in the folder [swgts-frontend](swgts-frontend). Requests are forwarded to localhost by default (assuming the backend is located on the same machine), this can be adjusted in the package.json proxy directive.
 
+## References
+
+SWGTS uses minimap2's (https://doi.org/10.1093/bioinformatics/bty191) in-memory version mappy as the default mapping tool.
+
 ## REST API
 
 ### GET /api/server-status
