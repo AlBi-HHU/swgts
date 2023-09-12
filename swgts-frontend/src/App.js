@@ -8,6 +8,8 @@ import {uploadFASTQ} from './data/FASTQProcessing.js';
 import {ProgressMonitor} from './components/ProgressMonitor.js';
 import {InfoDialog} from './components/InfoDialog.js';
 import GitInfo from 'react-git-info/macro';
+import logo from './logo.png' // relative path to image 
+import githubmark from './githubmark.png' // relative path to image 
 
 //GIT
 const gitInfo = GitInfo();
@@ -60,7 +62,7 @@ class App extends Component{
   
   updateServerStatus(response){
         this.setState(
-            {serverVersionText : response.data.commit + ':' + response.data.date + ' Uptime: '+Math.round(response.data.uptime*100)/100+'s'}
+            {serverVersionText : response.data.commit + ' : ' + response.data.date + ' Uptime: '+Math.round(response.data.uptime*100)/100+'s'}
         );  
   }
   
@@ -116,8 +118,10 @@ initiate_upload(file_list, download){
     <div className="App">
       <small>{ 'SWGTS Demo, Version: ' + gitInfo.commit.date }</small>
       <br/>
-      <small>Last commit: {gitInfo.commit.message}</small>
+        <img src={logo} width="128"/>
       <br/>
+      <a href="https://github.com/AlBi-HHU/swgts"><img src={githubmark} width="64"/></a>
+            <br/>
       <small>Server Version: {this.state.serverVersionText}</small>
       {this.state.uploading ? null : <LoadDataView className = "ldv" dialogCallback = {this.dialogCallback} initiate_upload = {this.initiate_upload}> </LoadDataView>}
        {this.state.uploading ? <ProgressMonitor
