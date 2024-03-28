@@ -1,5 +1,5 @@
 # We build the backend first, then the frontend, and then install everything in a new container.
-ARG PYTHON_IMAGE_TAG=3.11-slim
+ARG PYTHON_IMAGE_TAG=3.12-slim
 
 # Backend
 FROM python:$PYTHON_IMAGE_TAG AS backend-builder
@@ -10,16 +10,17 @@ FROM python:$PYTHON_IMAGE_TAG AS backend-builder
 RUN apt-get update && \
     apt-get --no-install-recommends --yes install git gcc libc-dev zlib1g-dev
 
-ADD swgts-backend/swgts-filter swgts-filter
-RUN mkdir /dummy_git
-ADD .git /dummy_git/.git
-# This could also be moved to the requirements.txt
-RUN pip wheel --no-cache-dir --wheel-dir wheels \
-        git+https://github.com/lh3/minimap2.git@v2.26 \
-        ./swgts-filter
+RUN pip wheel --no-cache-dir --wheel-dir wheels git+https://github.com/lh3/minimap2.git@v2.26
+
+ADD swgts-backend/swgts_filter swgts_filter
+RUN pip wheel --wheel-dir wheels ./swgts_filter
+
+FROM python:$PYTHON_IMAGE_TAG
+
+COPY --from=backend-builder wheels wheels
 
 # Install our application, and its dependencies
 RUN pip install wheels/*.whl && \
     rm -rf wheels
 
-ENTRYPOINT ["python","swgts-filter/server/app.py"]
+ENTRYPOINT ["python", "-m", "swgts_filter.server"]

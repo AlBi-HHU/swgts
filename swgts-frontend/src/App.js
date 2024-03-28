@@ -14,7 +14,7 @@ import githubmark from './githubmark.png' // relative path to image
 //GIT
 const gitInfo = GitInfo();
 
-//axios.defaults.baseURL = 'https://localhost/'
+//axios.defaults.baseURL = 'https://localhost.de/'
 
 class App extends Component{
 
@@ -104,7 +104,7 @@ class App extends Component{
 initiate_upload(file_list, download){
       this.setState({'uploading':true, 'filtered': 0, 'progress' : 0})
       uploadFASTQ(
-            file_list, download, this.updateProgress, this.updateTotal, this.updateBufferFill,this.updateFiltered, this.dialogCallback
+            file_list, download, this.updateProgress, this.updateTotal, this.updateBufferFill,this.updateFiltered, this.dialogCallback, this.state.buffer_size
       ).then(
           () => this.setState({'uploading' : false})
       )

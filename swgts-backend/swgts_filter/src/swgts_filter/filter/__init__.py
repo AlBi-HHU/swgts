@@ -22,10 +22,12 @@ def info(*args, **kwargs) -> None:
 def is_read_legal(read: list[list[str]]) -> bool:
     """Return True if you want to keep the read.
     :param read: The read as n lists of reads (n=1 for single end, n=2 for paired end) ( 4 element List of str) ."""
+    if read[0][2] == 'TOO_LONG':
+        return False
     return _actual_is_read_legal(read)
 
 
-def init_filter(filter_mode : str, mapping_preset: str, minimap2_reference_database: str, minimap2_positive_contig: str,minimap2_quality_threshold : int):
+def init_filter(filter_mode : str, mapping_preset: str, minimap2_reference_database: str, minimap2_positive_contig: str, minimap2_quality_threshold : int):
     global _actual_is_read_legal
 
     info(f'Filter initialization {filter_mode}')

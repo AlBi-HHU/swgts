@@ -24,8 +24,5 @@ MINIMAP2_QUALITY_THRESHOLD : int = 20
 #docker name or hostname of the redis service
 REDIS_SERVER: str = 'redis'
 
-# How long after the last contact should a context be deleted?
-CONTEXT_TIMEOUT: int = 60
-
 #Number of concurrent worker threads used for filtering
 WORKER_THREADS: int = 8

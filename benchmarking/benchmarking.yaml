@@ -1,0 +1,14 @@
+name: benchmarking
+channels:
+  - conda-forge
+dependencies:
+  - mappy
+  - biopython
+  - ca-certificates
+  - openssl
+  - scipy
+  - pandas
+  - altair
+  - seqtk
+  - gzip
+  - paramiko

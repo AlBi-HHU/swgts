@@ -3,8 +3,8 @@ version: "3"
 services:
     swgts-api:
         build:
-          context: ./
-          dockerfile: swgts-backend/swgts-api/Dockerfile
+            context: ./
+            dockerfile: swgts-backend/swgts_api/Dockerfile
         volumes:
             - type: bind
               source: ./input
@@ -14,7 +14,7 @@ services:
               source: ./output
               target: /output
         ports:
-          - "80"
+            - "80"
         networks:
             - traefik-api
             - api-redis
@@ -34,8 +34,8 @@ services:
 
     swgts-filter:
         build:
-          context: ./
-          dockerfile: swgts-backend/swgts-filter/Dockerfile
+            context: ./
+            dockerfile: swgts-backend/swgts_filter/Dockerfile
         volumes:
             - type: bind
               source: ./input
@@ -87,7 +87,7 @@ services:
               condition: service_started
 
     traefik:
-      image: traefik:v2.10
+      image: traefik:v2.11
       command:
         - --configFile=/traefik/conf.yml
       ports:

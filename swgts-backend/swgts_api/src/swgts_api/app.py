@@ -1,6 +1,5 @@
 # coding=utf-8
 import sys
-from time import time
 from typing import Union
 
 from flask import Flask, request, make_response
@@ -51,7 +50,7 @@ def post_close_context(context_id: UUID) -> dict[str, Union[int, str, list[str]]
     pending_bytes : int = get_pending_bytes_count(context_id)
     if pending_bytes != 0:
         return make_response({
-            'Retry-After': pending_bytes*get_queue_speed(),
+            'Retry-After': pending_bytes*get_queue_speed(context_id),
             'message' : 'There are still reads pending, try again later!'
         }, 503)
 
@@ -64,53 +63,83 @@ def post_close_context(context_id: UUID) -> dict[str, Union[int, str, list[str]]
 
 @app.route('/context/<uuid:context_id>/reads', methods=['POST'])
 def post_context_reads(context_id: UUID) -> dict[str, Union[int, str]]:
+
+    request_reception_time = time()
+
     if not context_exists(context_id):
         return make_response({'message': 'No such context.'}, 404)
 
-    chunks: list[list[list[str]]]
+    chunk: list[list[list[str]]]
     try:
-        chunks = request.get_json()
+        chunk = request.get_json()
     except TypeError:
         return make_response({'message': 'Expected json body.'}, 400)
     except OSError:
         return make_response({'message': 'The connection was interrupted.'}, 400)
 
-    if not isinstance(chunks, list):
+    if not isinstance(chunk, list):
         return make_response({'message': '"chunks" is not a list.'}, 400)
 
     effective_cumulated_chunk_size: int = 0
     pair_count: int = get_pair_count(context_id)  # We expect as much reads to be paired as we have open file streams. (Support for strobe reads in theory)
-    for chunk in chunks:
-        if not isinstance(chunk, list):
-            return make_response({'message': 'There is a chunk which is not a list.'}, 400)
-        if len(chunk) != pair_count:
+
+    pairs_short_enough = []
+    for pair in chunk:
+        if not isinstance(pair, list):
+            return make_response({'message': 'There is a pair which is not a list.'}, 400)
+        if len(pair) != pair_count:
             return make_response({'message': f'I thought you wanted to submit {pair_count}-paired reads, '
-                                             f'but here I got a pair that had {len(chunk)} reads.'}, 400)
-        for read in chunk:
+                                             f'but here I got a pair that had {len(pair)} reads.'}, 400)
+        filtered_pair = []
+        for read in pair:
             if not isinstance(read, list):
                 return make_response({'message': 'There is a read which is not a list.'}, 400)
             if len(read) != 4:
                 return make_response({'message': 'There is a read with a length != 4.'}, 400)
-            # Here would be the place to test if a read looks suspicious TODO
-            # Only count the length of the actual sequence
-            effective_cumulated_chunk_size += len(read[1])
+            # Here would be the place to perform additional sanity checks
 
+            if len(read[1]) <= app.config['MAXIMUM_PENDING_BYTES']:
+                # Only count the length of the actual sequence
+                effective_cumulated_chunk_size += len(read[1])
+                filtered_pair.append(read)
+            else:
+                increment_processed_bases(len(read[1]))
+                #The read will be discarded anyways and doesn't matter for buffer calculation
+                break
+        else:
+            #All reads fit the size and can be enqueued for filtering
+            pairs_short_enough.append(filtered_pair)
     current_pending : int  = get_pending_bytes_count(context_id)
     excess : int  = current_pending + effective_cumulated_chunk_size - app.config['MAXIMUM_PENDING_BYTES']
 
-    if excess > 0:
+    if effective_cumulated_chunk_size > app.config['MAXIMUM_PENDING_BYTES']:
         resp =  make_response(
-            {'message': f'You sent too much data.', 'pending bytes': current_pending, 'processed reads': get_processed_read_count(context_id)}, 422)
+            {'message': f'You sent a chunk that is larger than the configured buffer size',
+             'processed reads': get_processed_read_count(context_id)
+             }, 413)
         #Fetch current average processing
-        resp.headers['Retry-After'] = excess*get_queue_speed()
+        resp.headers['Retry-After'] = excess*get_queue_speed(context_id)
+        return resp
+
+    elif excess > 0:
+        resp =  make_response(
+            {'message': f'You sent too much data.',
+             'pending bytes': current_pending,
+             'processed reads': get_processed_read_count(context_id)
+             }, 422)
+        #Fetch current average processing
+        resp.headers['Retry-After'] = excess*get_queue_speed(context_id)
         return resp
 
     #Execution from here on means accepting the chunk and processing the reads
     #Adjust pending bytes stat in redis
     current_pending = change_pending_bytes_count(context_id, effective_cumulated_chunk_size)
 
-    #Queue job
-    enqueue_chunks(chunks, context_id, effective_cumulated_chunk_size)
+    increase_processed_read_count(context_id, len(chunk)-len(pairs_short_enough))
+
+    #Queue job and reads that are too long
+    if len(pairs_short_enough) > 0:
+        enqueue_chunks(pairs_short_enough, context_id, effective_cumulated_chunk_size, request_reception_time)
 
     return make_response({
         'processed reads': get_processed_read_count(context_id),
@@ -136,6 +165,8 @@ if not redis_ping():
     app.logger.fatal('Could not connect to stateful backend. Goodbye.')
     sys.exit(1)
 
+#Share Context Timeout
+share_timeout(app.config['CONTEXT_TIMEOUT'])
 
 SERVER_LAUNCH_TIME = time()
 app.logger.info('Server launched.')

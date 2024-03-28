@@ -7,7 +7,7 @@ const WORKER_THREADS = 4;
 const MAX_ATTEMPTS = 5;
 
 async function sendFASTQPackage(lines, context){
-	//console.log('Sending: ',lines)
+	console.log('Sending: ',lines)
     return new Promise(async (resolve,reject) => {
         try{
             let response = await axios.post('/api/context/' + context + '/reads', lines);
@@ -29,18 +29,21 @@ async function workerThread(
     context,
     updateProgressCallback,
     updateBufferFillCallback,
-    updateFilteredCallback
+    updateFilteredCallback,
+    buffer_size
 ){
     return new Promise(async (resolve,reject) => {
         //console.log("Hi, this is me, a worker thread, I am working with this data here:",lines_per_readfile)
         let buffer = [];
-        let currentSize = 0;
+        let current_size = 0;
+        let processed_reads = 0;
         for(let i = 0; i < lines_per_readfile[0].length; i+=4) {
-            buffer.push(
-                lines_per_readfile.map(readfile_lines => readfile_lines.slice(i,i+4))
-            )
-            currentSize += 4;
-            if ((currentSize >= PACKAGE_SIZE) || (i === lines_per_readfile[0].length-4)){
+            let read_size = lines_per_readfile.map(readfile_lines => readfile_lines[i+1].length).reduce((sum,num) => sum + num);
+            if (
+                ((current_size + read_size >= buffer_size) || (i === lines_per_readfile[0].length-4)) &&
+                (current_size !== 0)
+            ){
+                console.log('Dispatching package of size ',current_size)
                 let attempts = 0;
                 while (true){
                     //Do not loop forever, if at some point we exceed a set amount of attempts we surrender
@@ -65,9 +68,11 @@ async function workerThread(
                             updateBufferFillCallback(error.response.data['pending bytes'])
                             updateFilteredCallback(error.response.data['processed reads'])
                             console.log('got an "orderly" 422 response asking me to slow down ...')
-                            const timeout = error.response.headers['retry-after'];
+                            let timeout = parseFloat(error.response.headers.get('retry-after'));
+                            console.log(error.response.headers.get('retry-after'))
                             console.log(`sleeping for ${timeout} seconds zzzzzzzz`)
-                            await sleep(timeout*1000);
+                            //await sleep(timeout*1000);
+                            await sleep(10000)
                         }
                         else{
                             console.log('got an unexpected error from the server side:',error.toString())
@@ -78,12 +83,17 @@ async function workerThread(
                     }
                 }
 
-                updateProgressCallback(currentSize/4);
 
                 buffer = [];
-                currentSize = 0;
+                current_size = 0;
 
             }
+            buffer.push(
+                lines_per_readfile.map(readfile_lines => readfile_lines.slice(i,i+4))
+            )
+            current_size += read_size
+            updateProgressCallback(1);
+
         }
         //TODO: Return true/false 
         resolve();
@@ -111,8 +121,12 @@ async function fastqFileToLines(f){
 }
 
 
-async function uploadFASTQ(files, download_files, updateProgressCallback, updateTotalCallback, updateBufferFillCallback,updateFilteredCallback, dialogCallback){
-
+async function uploadFASTQ(files,
+                           download_files,
+                           updateProgressCallback,
+                           updateTotalCallback,
+                           updateBufferFillCallback,updateFilteredCallback, dialogCallback,
+                           buffer_size){
     if (files.length > 2){
         dialogCallback(`More than 2 files selected for uploading, strobe reads are currently not supported, please use one read file or two read files for paired-end sequencing!`);
         return;
@@ -160,7 +174,8 @@ async function uploadFASTQ(files, download_files, updateProgressCallback, update
             }
             const linesForWorker = fqsAsText.map(a => a.slice(start, end));
             console.log('Starting worker with ID:' + threadid + ' that will process reads from ' + start/4 + ' to ' + end/4);
-            promisesPerWorker.push(workerThread(linesForWorker, context, updateProgressCallback, updateBufferFillCallback, updateFilteredCallback))
+            promisesPerWorker.push(workerThread(
+                linesForWorker, context, updateProgressCallback, updateBufferFillCallback, updateFilteredCallback, buffer_size))
         }
 
         //Join on all async threads
@@ -212,7 +227,7 @@ async function uploadFASTQ(files, download_files, updateProgressCallback, update
                     updateBufferFillCallback(error.response.data['pending bytes'])
                     updateFilteredCallback(error.response.data['processed reads'])
                     console.log('got an "orderly" 422 response asking me to slow down ...')
-                    const timeout = error.response.headers['retry-after'];
+                    const timeout = error.response.headers['Retry-After'];
                     console.log(`sleeping for ${timeout} seconds zzzzzzzz`)
                     await sleep(timeout*1000);
                 }

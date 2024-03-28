@@ -1,6 +1,6 @@
 # We build the backend first, then the frontend, and then install everything in a new container.
 
-ARG PYTHON_IMAGE_TAG=3.11-slim
+ARG PYTHON_IMAGE_TAG=3.12-slim
 
 # Backend
 FROM python:$PYTHON_IMAGE_TAG AS backend-builder
@@ -11,7 +11,7 @@ FROM python:$PYTHON_IMAGE_TAG AS backend-builder
 RUN apt-get update && \
     apt-get --no-install-recommends --yes install git gcc libc-dev zlib1g-dev
 
-ADD swgts-backend/swgts-api backend
+ADD swgts-backend/swgts_api backend
 RUN mkdir /dummy_git
 ADD .git /dummy_git/.git
 # This could also be moved to the requirements.txt
@@ -36,7 +36,7 @@ RUN apt-get update && \
 COPY --from=backend-builder wheels wheels
 
 # Enable our site in apache
-ADD swgts-backend/swgts-api/docker/apache-site.conf /etc/apache2/sites-available/swgts.conf
+ADD swgts-backend/swgts_api/docker/apache-site.conf /etc/apache2/sites-available/swgts.conf
 RUN a2enmod http2 && \
     a2ensite swgts
 
@@ -48,7 +48,7 @@ RUN pip install wheels/*.whl && \
 RUN mkdir -p /output /input /var/www/swgts
 
 # Add the wsgi application file
-ADD swgts-backend/swgts-api/docker/api.wsgi /var/www/swgts/api.wsgi
+ADD swgts-backend/swgts_api/docker/api.wsgi /var/www/swgts/api.wsgi
 
 # Ensure the rights are correctly set
 RUN chown -R www-data:www-data /var/www/swgts /output && \
@@ -61,7 +61,7 @@ STOPSIGNAL SIGWINCH
 RUN mkdir -p /output /input
 
 #add entrypoint
-ADD swgts-backend/swgts-api/docker/entrypoint.sh /entrypoint.sh
+ADD swgts-backend/swgts_api/docker/entrypoint.sh /entrypoint.sh
 
 EXPOSE 80
 CMD ["/bin/sh","/entrypoint.sh"]
